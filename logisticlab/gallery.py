@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .core import iterate, logistic, lyapunov_exponent, sample_tail
+from .core import invariant_density_r4, logistic, lyapunov_exponent, orbit_density, sample_tail
 from .svg import PlotBox, svg_line, svg_text
 
 REPO = Path(__file__).resolve().parents[1]
@@ -143,12 +143,76 @@ def cobweb_triptych_svg() -> str:
     return '\n'.join(parts) + '\n'
 
 
+def density_contrast_svg() -> str:
+    width, height = 1460, 760
+    parts = _header(width, height, 'Orbit-density contrast in the logistic map', 'At r = 4 the chaotic invariant measure piles up near the edges. In a period-3 window the mass collapses onto a few bands.')
+    panel_width = 610
+    gap = 60
+    panel_top = 150
+    panel_bottom = 660
+    lefts = [90, 90 + panel_width + gap]
+    boxes = [
+        PlotBox(lefts[0], panel_top, lefts[0] + panel_width, panel_bottom, 0.0, 1.0, 0.0, 3.8),
+        PlotBox(lefts[1], panel_top, lefts[1] + panel_width, panel_bottom, 0.0, 1.0, 0.0, 14.0),
+    ]
+
+    left_density = orbit_density(4.0, keep=50000, bins=64)
+    right_density = orbit_density(3.83, keep=24000, bins=64)
+
+    panel_meta = [
+        (boxes[0], 'r = 4.0', 'empirical histogram plus exact invariant density', left_density, '#7dd3fc'),
+        (boxes[1], 'r = 3.83', 'period-3 window: the orbit keeps revisiting a few narrow bands', right_density, '#c084fc'),
+    ]
+
+    for box, label, subtitle, density, color in panel_meta:
+        parts.append(f'<rect x="{box.left}" y="{box.top}" width="{box.right - box.left}" height="{box.bottom - box.top}" class="panel"/>')
+        parts.append(svg_text(box.left, box.top - 18, label, 'label'))
+        parts.append(svg_text(box.left + 95, box.top - 18, subtitle, 'small'))
+        for tick in [0.0, 0.25, 0.5, 0.75, 1.0]:
+            x = box.sx(tick)
+            parts.append(svg_line(x, box.top, x, box.bottom, 'grid'))
+            parts.append(svg_text(x, box.bottom + 26, f'{tick:.2f}'.rstrip('0').rstrip('.'), 'small', 'middle'))
+        top_tick = int(box.y_max)
+        for tick in range(0, top_tick + 1):
+            y = box.sy(float(tick))
+            parts.append(svg_line(box.left, y, box.right, y, 'grid'))
+            if tick < box.y_max + 1e-9:
+                parts.append(svg_text(box.left - 42, y + 5, str(tick), 'small'))
+        parts.append(svg_line(box.left, box.bottom, box.right, box.bottom, 'axis'))
+        parts.append(svg_line(box.left, box.top, box.left, box.bottom, 'axis'))
+        bar_width = (box.right - box.left) / len(density)
+        for idx, (_, value) in enumerate(density):
+            x0 = box.left + idx * bar_width
+            y = box.sy(value)
+            parts.append(
+                f'<rect x="{x0 + 1:.2f}" y="{y:.2f}" width="{max(1.0, bar_width - 2):.2f}" height="{box.bottom - y:.2f}" fill="{color}" opacity="0.68"/>'
+            )
+        parts.append(svg_text((box.left + box.right) / 2, box.bottom + 54, 'state x', 'small', 'middle'))
+
+    theory_points = []
+    left_box = boxes[0]
+    for step in range(1, 640):
+        x = step / 640.0
+        y = min(left_box.y_max, invariant_density_r4(x))
+        theory_points.append(f'{left_box.sx(x):.2f},{left_box.sy(y):.2f}')
+    parts.append(f'<polyline points="{" ".join(theory_points)}" fill="none" stroke="#f97316" stroke-width="3.2" stroke-linejoin="round" stroke-linecap="round"/>')
+    parts.append(svg_text(left_box.left + 340, left_box.top + 36, 'orange curve = exact density 1 / (π√(x(1-x)))', 'small'))
+    parts.append(svg_text(left_box.left + 340, left_box.top + 60, 'blue bars = long-run histogram from 50,000 iterates', 'small'))
+
+    right_box = boxes[1]
+    parts.append(svg_text(right_box.left + 295, right_box.top + 36, 'the mass collapses into a few spikes because the orbit falls into a period-3 window', 'small'))
+    parts.append(svg_text(58, (panel_top + panel_bottom) / 2, 'density', 'small', 'middle'))
+    parts.append('</svg>')
+    return '\n'.join(parts) + '\n'
+
+
 def write_gallery() -> list[Path]:
     ASSETS.mkdir(parents=True, exist_ok=True)
     files = {
         ASSETS / 'logistic-bifurcation.svg': bifurcation_svg(),
         ASSETS / 'lyapunov-sweep.svg': lyapunov_svg(),
         ASSETS / 'cobweb-triptych.svg': cobweb_triptych_svg(),
+        ASSETS / 'density-contrast.svg': density_contrast_svg(),
     }
     for path, content in files.items():
         path.write_text(content)

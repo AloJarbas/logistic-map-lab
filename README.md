@@ -10,8 +10,8 @@ This repo keeps the scope narrow on purpose:
 
 ## What is here
 
-- `logisticlab/core.py` — iteration, long-run tail sampling, and Lyapunov exponent estimation
-- `logisticlab/gallery.py` — figure generators for the bifurcation diagram, Lyapunov sweep, and a cobweb triptych
+- `logisticlab/core.py` — iteration, long-run tail sampling, orbit-density histograms, and Lyapunov exponent estimation
+- `logisticlab/gallery.py` — figure generators for the bifurcation diagram, Lyapunov sweep, cobweb triptych, and orbit-density contrast card
 - `scripts/generate_gallery.py` — one command to rebuild the assets
 - `tests/test_core.py` — small verification checks for boundedness, fixed-point behavior, and Lyapunov sign
 
@@ -28,6 +28,10 @@ This repo keeps the scope narrow on purpose:
 ### Cobweb triptych
 
 ![Cobweb triptych](assets/cobweb-triptych.svg)
+
+### Orbit-density contrast
+
+![Orbit-density contrast](assets/density-contrast.svg)
 
 ## Run it
 
@@ -51,7 +55,7 @@ That makes it a good public micro-lab:
 
 ## Good next moves
 
-- add orbit-density and invariant-measure figures
 - add a small parameter-report CLI for fixed points, cycle hints, and Lyapunov classification
 - add a notebook on period-doubling and Feigenbaum scaling
+- add one comparison note on why the exact r = 4 invariant density is useful but still a special case
 - branch into a second one-dimensional map only if the logistic lane already feels complete

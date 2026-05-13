@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-import math
 import unittest
 
-from logisticlab.core import iterate, logistic, lyapunov_exponent, sample_tail
+from logisticlab.core import histogram_density, invariant_density_r4, iterate, logistic, lyapunov_exponent, orbit_density, sample_tail
 
 
 class LogisticCoreTests(unittest.TestCase):
@@ -26,6 +25,21 @@ class LogisticCoreTests(unittest.TestCase):
     def test_lyapunov_signs(self) -> None:
         self.assertLess(lyapunov_exponent(2.9), 0.0)
         self.assertGreater(lyapunov_exponent(3.9), 0.0)
+
+    def test_histogram_density_normalizes_area(self) -> None:
+        bins = histogram_density([0.1, 0.2, 0.4, 0.8], bins=4)
+        width = 1.0 / 4.0
+        area = sum(value for _, value in bins) * width
+        self.assertAlmostEqual(area, 1.0, places=8)
+
+    def test_invariant_density_r4_is_symmetric(self) -> None:
+        self.assertAlmostEqual(invariant_density_r4(0.2), invariant_density_r4(0.8), places=8)
+
+    def test_orbit_density_at_r4_is_edge_heavier_than_center(self) -> None:
+        density = orbit_density(4.0, keep=12000, bins=48)
+        center = density[len(density) // 2][1]
+        self.assertGreater(density[0][1], center)
+        self.assertGreater(density[-1][1], center)
 
 
 if __name__ == '__main__':
