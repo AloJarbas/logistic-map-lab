@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from .core import invariant_density_r4, logistic, lyapunov_exponent, orbit_density, sample_tail
-from .svg import PlotBox, svg_line, svg_text
+from .svg import PlotBox, svg_line, svg_paragraph, svg_text
 
 REPO = Path(__file__).resolve().parents[1]
 ASSETS = REPO / "assets"
@@ -34,8 +34,8 @@ def _header(width: int, height: int, title: str, subtitle: str) -> list[str]:
 
 
 def bifurcation_svg() -> str:
-    width, height = 1400, 900
-    box = PlotBox(90, 120, 1320, 820, 2.8, 4.0, 0.0, 1.0)
+    width, height = 1380, 920
+    box = PlotBox(110, 130, 1290, 820, 2.8, 4.0, 0.0, 1.0)
     parts = _header(width, height, 'Logistic map bifurcation diagram', 'A one-line recurrence that still shows fixed points, period doubling, and chaos.')
     parts.append(f'<rect x="{box.left}" y="{box.top}" width="{box.right - box.left}" height="{box.bottom - box.top}" class="panel"/>')
     for tick in [3.0, 3.2, 3.4, 3.6, 3.8, 4.0]:
@@ -45,11 +45,11 @@ def bifurcation_svg() -> str:
     for tick in [0.0, 0.25, 0.5, 0.75, 1.0]:
         y = box.sy(tick)
         parts.append(svg_line(box.left, y, box.right, y, 'grid'))
-        parts.append(svg_text(56, y + 5, f'{tick:.2f}'.rstrip('0').rstrip('.'), 'small'))
+        parts.append(svg_text(84, y + 5, f'{tick:.2f}'.rstrip('0').rstrip('.'), 'small', 'end'))
     parts.append(svg_line(box.left, box.bottom, box.right, box.bottom, 'axis'))
     parts.append(svg_line(box.left, box.top, box.left, box.bottom, 'axis'))
-    parts.append(svg_text((box.left + box.right) / 2, 885, 'growth parameter r', 'small', 'middle'))
-    parts.append(svg_text(28, (box.top + box.bottom) / 2, 'long-run state x', 'small', 'middle'))
+    parts.append(svg_text((box.left + box.right) / 2, 884, 'growth parameter r', 'small', 'middle'))
+    parts.append(svg_text(34, (box.top + box.bottom) / 2, 'long-run state x', 'small', 'middle', transform=f'rotate(-90 34 {(box.top + box.bottom) / 2:.1f})'))
 
     colors = {0: '#7dd3fc', 1: '#67e8f9', 2: '#c4b5fd'}
     commands = {key: [] for key in colors}
@@ -67,8 +67,8 @@ def bifurcation_svg() -> str:
 
 
 def lyapunov_svg() -> str:
-    width, height = 1400, 700
-    box = PlotBox(90, 120, 1320, 610, 2.8, 4.0, -1.8, 0.8)
+    width, height = 1380, 740
+    box = PlotBox(110, 130, 1290, 620, 2.8, 4.0, -1.8, 0.8)
     parts = _header(width, height, 'Lyapunov exponent across the logistic map', 'Negative means nearby orbits collapse together. Positive means they separate exponentially.')
     parts.append(f'<rect x="{box.left}" y="{box.top}" width="{box.right - box.left}" height="{box.bottom - box.top}" class="panel"/>')
     zero = box.sy(0.0)
@@ -81,10 +81,12 @@ def lyapunov_svg() -> str:
     for tick in [-1.5, -1.0, -0.5, 0.0, 0.5]:
         y = box.sy(tick)
         parts.append(svg_line(box.left, y, box.right, y, 'grid'))
-        parts.append(svg_text(46, y + 5, f'{tick:.1f}', 'small'))
+        parts.append(svg_text(84, y + 5, f'{tick:.1f}', 'small', 'end'))
     parts.append(svg_line(box.left, zero, box.right, zero, 'axis'))
     parts.append(svg_line(box.left, box.top, box.left, box.bottom, 'axis'))
     parts.append(svg_line(box.left, box.bottom, box.right, box.bottom, 'axis'))
+    parts.append(svg_text((box.left + box.right) / 2, 676, 'growth parameter r', 'small', 'middle'))
+    parts.append(svg_text(34, (box.top + box.bottom) / 2, 'Lyapunov exponent λ', 'small', 'middle', transform=f'rotate(-90 34 {(box.top + box.bottom) / 2:.1f})'))
 
     points = []
     samples = 900
@@ -100,19 +102,19 @@ def lyapunov_svg() -> str:
 
 
 def cobweb_triptych_svg() -> str:
-    width, height = 1500, 560
+    width, height = 1320, 660
     parts = _header(width, height, 'Cobweb triptych: stable point, two-cycle, chaos', 'Three values of r are enough to show how the same recurrence changes character.')
-    panel_width = 420
+    panel_width = 360
     gap = 30
     lefts = [80 + i * (panel_width + gap) for i in range(3)]
     rs = [2.9, 3.2, 3.7]
     subtitles = ['stable fixed point', 'period-two orbit', 'chaotic orbit']
 
     for idx, (left, r, subtitle) in enumerate(zip(lefts, rs, subtitles)):
-        box = PlotBox(left, 150, left + panel_width, 500, 0.0, 1.0, 0.0, 1.0)
+        box = PlotBox(left, 170, left + panel_width, 560, 0.0, 1.0, 0.0, 1.0)
         parts.append(f'<rect x="{left}" y="{box.top}" width="{panel_width}" height="{box.bottom - box.top}" class="panel"/>')
-        parts.append(svg_text(left, 132, f'r = {r:.1f}', 'label'))
-        parts.append(svg_text(left + 110, 132, subtitle, 'small'))
+        parts.append(svg_text(left, 148, f'r = {r:.1f}', 'label'))
+        parts.append(svg_text(left + 110, 148, subtitle, 'small'))
         for tick in [0.0, 0.25, 0.5, 0.75, 1.0]:
             x = box.sx(tick)
             y = box.sy(tick)
@@ -144,13 +146,13 @@ def cobweb_triptych_svg() -> str:
 
 
 def density_contrast_svg() -> str:
-    width, height = 1460, 760
+    width, height = 1380, 820
     parts = _header(width, height, 'Orbit-density contrast in the logistic map', 'At r = 4 the chaotic invariant measure piles up near the edges. In a period-3 window the mass collapses onto a few bands.')
-    panel_width = 610
+    panel_width = 540
     gap = 60
-    panel_top = 150
-    panel_bottom = 660
-    lefts = [90, 90 + panel_width + gap]
+    panel_top = 180
+    panel_bottom = 690
+    lefts = [110, 110 + panel_width + gap]
     boxes = [
         PlotBox(lefts[0], panel_top, lefts[0] + panel_width, panel_bottom, 0.0, 1.0, 0.0, 3.8),
         PlotBox(lefts[1], panel_top, lefts[1] + panel_width, panel_bottom, 0.0, 1.0, 0.0, 14.0),
@@ -177,13 +179,14 @@ def density_contrast_svg() -> str:
             y = box.sy(float(tick))
             parts.append(svg_line(box.left, y, box.right, y, 'grid'))
             if tick < box.y_max + 1e-9:
-                parts.append(svg_text(box.left - 42, y + 5, str(tick), 'small'))
+                parts.append(svg_text(box.left - 20, y + 5, str(tick), 'small', 'end'))
         parts.append(svg_line(box.left, box.bottom, box.right, box.bottom, 'axis'))
         parts.append(svg_line(box.left, box.top, box.left, box.bottom, 'axis'))
         bar_width = (box.right - box.left) / len(density)
         for idx, (_, value) in enumerate(density):
             x0 = box.left + idx * bar_width
-            y = box.sy(value)
+            clamped_value = min(box.y_max, value)
+            y = box.sy(clamped_value)
             parts.append(
                 f'<rect x="{x0 + 1:.2f}" y="{y:.2f}" width="{max(1.0, bar_width - 2):.2f}" height="{box.bottom - y:.2f}" fill="{color}" opacity="0.68"/>'
             )
@@ -196,12 +199,17 @@ def density_contrast_svg() -> str:
         y = min(left_box.y_max, invariant_density_r4(x))
         theory_points.append(f'{left_box.sx(x):.2f},{left_box.sy(y):.2f}')
     parts.append(f'<polyline points="{" ".join(theory_points)}" fill="none" stroke="#f97316" stroke-width="3.2" stroke-linejoin="round" stroke-linecap="round"/>')
-    parts.append(svg_text(left_box.left + 340, left_box.top + 36, 'orange curve = exact density 1 / (π√(x(1-x)))', 'small'))
-    parts.append(svg_text(left_box.left + 340, left_box.top + 60, 'blue bars = long-run histogram from 50,000 iterates', 'small'))
+    parts.append(svg_paragraph(left_box.left + 300, left_box.top + 34, [
+        'orange curve = exact density 1 / (π√(x(1-x)))',
+        'blue bars = long-run histogram from 50,000 iterates',
+    ], 'small'))
 
     right_box = boxes[1]
-    parts.append(svg_text(right_box.left + 295, right_box.top + 36, 'the mass collapses into a few spikes because the orbit falls into a period-3 window', 'small'))
-    parts.append(svg_text(58, (panel_top + panel_bottom) / 2, 'density', 'small', 'middle'))
+    parts.append(svg_paragraph(right_box.left + 278, right_box.top + 34, [
+        'the mass collapses into a few spikes because',
+        'the orbit falls into a period-3 window',
+    ], 'small'))
+    parts.append(svg_text(42, (panel_top + panel_bottom) / 2, 'density', 'small', 'middle', transform=f'rotate(-90 42 {(panel_top + panel_bottom) / 2:.1f})'))
     parts.append('</svg>')
     return '\n'.join(parts) + '\n'
 
