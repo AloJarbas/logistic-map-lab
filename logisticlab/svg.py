@@ -2,6 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from html import escape
+from pathlib import Path
+import shutil
+import subprocess
+import tempfile
 
 
 @dataclass(frozen=True)
@@ -51,3 +55,34 @@ def svg_paragraph(
 
 def svg_line(x1: float, y1: float, x2: float, y2: float, klass: str) -> str:
     return f'<line x1="{x1:.1f}" y1="{y1:.1f}" x2="{x2:.1f}" y2="{y2:.1f}" class="{klass}"/>'
+
+
+def export_png_from_svg(svg_path: str | Path, png_path: str | Path, *, size: int = 1800, dpi: int = 300) -> bool:
+    svg_file = Path(svg_path).resolve()
+    png_file = Path(png_path).resolve()
+    qlmanage = shutil.which('qlmanage')
+    if qlmanage is None:
+        return False
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        subprocess.run(
+            [qlmanage, '-t', '-s', str(size), '-o', tmpdir, str(svg_file)],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        generated = Path(tmpdir) / f'{svg_file.name}.png'
+        if not generated.exists():
+            raise FileNotFoundError(f'Quick Look did not generate {generated}')
+        png_file.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(generated, png_file)
+
+    sips = shutil.which('sips')
+    if sips is not None:
+        subprocess.run(
+            [sips, '--setProperty', 'dpiWidth', str(dpi), '--setProperty', 'dpiHeight', str(dpi), str(png_file)],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    return True

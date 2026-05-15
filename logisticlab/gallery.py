@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from pathlib import Path
+import math
 
-from .core import invariant_density_r4, logistic, lyapunov_exponent, orbit_density, sample_tail
-from .svg import PlotBox, svg_line, svg_paragraph, svg_text
+from .core import feigenbaum_estimates, invariant_density_r4, logistic, lyapunov_exponent, orbit_density, sample_tail, scan_periods, scan_superstable_doubling
+from .svg import PlotBox, export_png_from_svg, svg_line, svg_paragraph, svg_text
 
 REPO = Path(__file__).resolve().parents[1]
 ASSETS = REPO / "assets"
@@ -214,6 +215,132 @@ def density_contrast_svg() -> str:
     return '\n'.join(parts) + '\n'
 
 
+def period_doubling_svg() -> str:
+    width, height = 1440, 1000
+    parts = _header(
+        width,
+        height,
+        'Period windows and Feigenbaum drift',
+        'A parameter scan finds stable periods directly, then the superstable points track how the doubling cascade compresses.',
+    )
+
+    scan_rows = scan_periods(3.0, 4.0, samples=820, warmup=2600, keep=256, max_period=64, tol=1e-8)
+    superstable = scan_superstable_doubling(6)
+    estimates = feigenbaum_estimates(superstable)
+
+    top_box = PlotBox(90, 150, 1350, 500, 3.0, 4.0, -0.9, 7.5)
+    left_box = PlotBox(90, 610, 690, 890, 0.5, 6.5, 2.96, 3.575)
+    right_box = PlotBox(760, 610, 1350, 890, 8.0, 64.0, 4.0, 5.4)
+
+    period_levels = {1: 6, 2: 5, 4: 4, 8: 3, 16: 2, 32: 1, 64: 0}
+    period_colors = {
+        1: '#7dd3fc',
+        2: '#67e8f9',
+        4: '#c4b5fd',
+        8: '#f9a8d4',
+        16: '#f59e0b',
+        32: '#f97316',
+        64: '#ef4444',
+    }
+
+    # top panel
+    parts.append(f'<rect x="{top_box.left}" y="{top_box.top}" width="{top_box.right - top_box.left}" height="{top_box.bottom - top_box.top}" class="panel"/>')
+    parts.append(svg_text(top_box.left, top_box.top - 18, 'Detected stable periods on a direct r-scan', 'label'))
+    parts.append(svg_text(top_box.left + 420, top_box.top - 18, 'negative Lyapunov plus a repeating tail makes the windows explicit', 'small'))
+    for tick in [3.0, 3.2, 3.4, 3.6, 3.8, 4.0]:
+        x = top_box.sx(tick)
+        parts.append(svg_line(x, top_box.top, x, top_box.bottom, 'grid'))
+        parts.append(svg_text(x, top_box.bottom + 28, f'{tick:.1f}', 'small', 'middle'))
+    labels = [(6, 'period 1'), (5, 'period 2'), (4, 'period 4'), (3, 'period 8'), (2, 'period 16'), (1, 'period 32'), (0, 'period 64'), (-0.65, 'chaos')]
+    for y_val, label in labels:
+        y = top_box.sy(y_val)
+        parts.append(svg_line(top_box.left, y, top_box.right, y, 'grid'))
+        parts.append(svg_text(top_box.left - 18, y + 5, label, 'small', 'end'))
+    parts.append(svg_line(top_box.left, top_box.bottom, top_box.right, top_box.bottom, 'axis'))
+    parts.append(svg_line(top_box.left, top_box.top, top_box.left, top_box.bottom, 'axis'))
+    parts.append(svg_text((top_box.left + top_box.right) / 2, top_box.bottom + 58, 'growth parameter r', 'small', 'middle'))
+
+    chaos_points: list[str] = []
+    stable_points: dict[int, list[str]] = {period: [] for period in period_levels}
+    other_points: list[str] = []
+    for row in scan_rows:
+        x = top_box.sx(row.r)
+        if row.detected_period in stable_points:
+            stable_points[row.detected_period].append(f'{x:.2f},{top_box.sy(period_levels[row.detected_period]):.2f}')
+        elif row.detected_period is not None and row.lyapunov < 0.0:
+            other_points.append(f'{x:.2f},{top_box.sy(6.75):.2f}')
+        else:
+            chaos_points.append(f'{x:.2f},{top_box.sy(-0.65):.2f}')
+    if chaos_points:
+        parts.append(f'<polyline points="{" ".join(chaos_points)}" fill="none" stroke="#94a3b8" stroke-opacity="0.35" stroke-width="2.2" stroke-linecap="round"/>')
+    if other_points:
+        parts.append(f'<polyline points="{" ".join(other_points)}" fill="none" stroke="#f8fafc" stroke-opacity="0.55" stroke-width="2.2" stroke-linecap="round"/>')
+    for period, points in stable_points.items():
+        if points:
+            parts.append(f'<polyline points="{" ".join(points)}" fill="none" stroke="{period_colors[period]}" stroke-opacity="0.72" stroke-width="2.6" stroke-linecap="round"/>')
+
+    parts.append(svg_paragraph(top_box.right - 300, top_box.top + 38, [
+        'repeat search up to period 64',
+        'otherwise count the point as chaos',
+    ], 'small'))
+
+    # bottom left panel: superstable points
+    parts.append(f'<rect x="{left_box.left}" y="{left_box.top}" width="{left_box.right - left_box.left}" height="{left_box.bottom - left_box.top}" class="panel"/>')
+    parts.append(svg_text(left_box.left, left_box.top - 18, 'Superstable doubling points', 'label'))
+    parts.append(svg_text(left_box.left + 280, left_box.top - 18, 'the critical point x = 0.5 lands back on itself at each band center', 'small'))
+    for tick in [3.0, 3.2, 3.4, 3.55]:
+        y = left_box.sy(tick)
+        parts.append(svg_line(left_box.left, y, left_box.right, y, 'grid'))
+        parts.append(svg_text(left_box.left - 18, y + 5, f'{tick:.2f}'.rstrip('0').rstrip('.'), 'small', 'end'))
+    for exponent in range(1, 7):
+        x = left_box.sx(exponent)
+        parts.append(svg_line(x, left_box.top, x, left_box.bottom, 'grid'))
+        parts.append(svg_text(x, left_box.bottom + 26, str(2**exponent), 'small', 'middle'))
+    parts.append(svg_line(left_box.left, left_box.bottom, left_box.right, left_box.bottom, 'axis'))
+    parts.append(svg_line(left_box.left, left_box.top, left_box.left, left_box.bottom, 'axis'))
+    parts.append(svg_text((left_box.left + left_box.right) / 2, left_box.bottom + 56, 'cycle period', 'small', 'middle'))
+    parts.append(svg_text(38, (left_box.top + left_box.bottom) / 2, 'superstable parameter r', 'small', 'middle', transform=f'rotate(-90 38 {(left_box.top + left_box.bottom) / 2:.1f})'))
+    coords = [f'{left_box.sx(math.log2(point.period)):.2f},{left_box.sy(point.r):.2f}' for point in superstable]
+    parts.append(f'<polyline points="{" ".join(coords)}" fill="none" stroke="#60a5fa" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>')
+    for point in superstable:
+        x = left_box.sx(math.log2(point.period))
+        y = left_box.sy(point.r)
+        parts.append(f'<circle cx="{x:.2f}" cy="{y:.2f}" r="5.2" fill="#dbeafe" stroke="#60a5fa" stroke-width="2"/>')
+
+    # bottom right panel: Feigenbaum estimates
+    parts.append(f'<rect x="{right_box.left}" y="{right_box.top}" width="{right_box.right - right_box.left}" height="{right_box.bottom - right_box.top}" class="panel"/>')
+    parts.append(svg_text(right_box.left, right_box.top - 18, 'Gap-ratio estimates for δ', 'label'))
+    parts.append(svg_text(right_box.left + 248, right_box.top - 18, 'gap ratios already lean toward the Feigenbaum constant', 'small'))
+    for tick in [8, 16, 32, 64]:
+        x = right_box.sx(float(tick))
+        parts.append(svg_line(x, right_box.top, x, right_box.bottom, 'grid'))
+        parts.append(svg_text(x, right_box.bottom + 26, str(tick), 'small', 'middle'))
+    for tick in [4.2, 4.6, 5.0, 5.4]:
+        y = right_box.sy(tick)
+        parts.append(svg_line(right_box.left, y, right_box.right, y, 'grid'))
+        parts.append(svg_text(right_box.left - 18, y + 5, f'{tick:.1f}', 'small', 'end'))
+    delta_line = right_box.sy(4.6692)
+    parts.append(f'<line x1="{right_box.left}" y1="{delta_line:.2f}" x2="{right_box.right}" y2="{delta_line:.2f}" stroke="#f8fafc" stroke-width="2" stroke-dasharray="8 8" opacity="0.85"/>')
+    parts.append(svg_text(right_box.right - 36, delta_line - 10, 'Feigenbaum δ ≈ 4.6692', 'small', 'end'))
+    parts.append(svg_line(right_box.left, right_box.bottom, right_box.right, right_box.bottom, 'axis'))
+    parts.append(svg_line(right_box.left, right_box.top, right_box.left, right_box.bottom, 'axis'))
+    parts.append(svg_text((right_box.left + right_box.right) / 2, right_box.bottom + 56, 'target period', 'small', 'middle'))
+    estimate_points = [f'{right_box.sx(float(estimate.period)):.2f},{right_box.sy(estimate.delta):.2f}' for estimate in estimates]
+    parts.append(f'<polyline points="{" ".join(estimate_points)}" fill="none" stroke="#f97316" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>')
+    for estimate in estimates:
+        x = right_box.sx(float(estimate.period))
+        y = right_box.sy(estimate.delta)
+        parts.append(f'<circle cx="{x:.2f}" cy="{y:.2f}" r="5.0" fill="#fed7aa" stroke="#f97316" stroke-width="2"/>')
+        parts.append(svg_text(x + 12, y - 14, f'{estimate.delta:.4f}', 'small'))
+
+    parts.append(svg_paragraph(92, 940, [
+        'Top: direct period detection on a dense r-scan. Bottom left: superstable points where the orbit of 0.5 lands back on 0.5.',
+        'Bottom right: successive gap ratios already drift toward δ, even in this small public calculation.',
+    ], 'small', line_height=18))
+    parts.append('</svg>')
+    return '\n'.join(parts) + '\n'
+
+
 def write_gallery() -> list[Path]:
     ASSETS.mkdir(parents=True, exist_ok=True)
     files = {
@@ -221,7 +348,9 @@ def write_gallery() -> list[Path]:
         ASSETS / 'lyapunov-sweep.svg': lyapunov_svg(),
         ASSETS / 'cobweb-triptych.svg': cobweb_triptych_svg(),
         ASSETS / 'density-contrast.svg': density_contrast_svg(),
+        ASSETS / 'period-doubling-atlas.svg': period_doubling_svg(),
     }
     for path, content in files.items():
         path.write_text(content)
+    export_png_from_svg(ASSETS / 'period-doubling-atlas.svg', ASSETS / 'period-doubling-atlas.png', size=1800, dpi=300)
     return list(files)

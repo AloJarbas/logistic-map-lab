@@ -10,10 +10,11 @@ This repo keeps the scope narrow on purpose:
 
 ## What is here
 
-- `logisticlab/core.py` — iteration, long-run tail sampling, orbit-density histograms, and Lyapunov exponent estimation
-- `logisticlab/gallery.py` — figure generators for the bifurcation diagram, Lyapunov sweep, cobweb triptych, and orbit-density contrast card
-- `scripts/generate_gallery.py` — one command to rebuild the assets
-- `tests/test_core.py` — small verification checks for boundedness, fixed-point behavior, and Lyapunov sign
+- `logisticlab/core.py` — iteration, long-run tail sampling, orbit-density histograms, Lyapunov exponent estimation, direct period detection, and superstable-point scans
+- `logisticlab/gallery.py` — figure generators for the bifurcation diagram, Lyapunov sweep, cobweb triptych, orbit-density contrast card, and the new period-doubling atlas
+- `logisticlab/cli.py` — direct parameter classification, period scans, superstable reports, and atlas rendering
+- `scripts/generate_gallery.py` — one command to rebuild the assets and the new period-doubling report
+- `tests/test_core.py` — verification checks for boundedness, fixed points, Lyapunov sign, period detection, and Feigenbaum-drift sanity
 
 ## Generated figures
 
@@ -33,11 +34,27 @@ This repo keeps the scope narrow on purpose:
 
 ![Orbit-density contrast](assets/density-contrast.svg)
 
+### Period windows and Feigenbaum drift
+
+![Period windows and Feigenbaum drift](assets/period-doubling-atlas.png)
+
 ## Run it
 
 ```bash
 python3 scripts/generate_gallery.py
 python3 -m unittest discover -s tests
+```
+
+Inspect one parameter directly:
+
+```bash
+python3 -m logisticlab.cli classify --r 3.55
+```
+
+Render the period-doubling atlas by itself:
+
+```bash
+python3 -m logisticlab.cli render-period-doubling --output assets/period-doubling-atlas.svg --png-output assets/period-doubling-atlas.png
 ```
 
 ## Why this repo exists
@@ -55,7 +72,7 @@ That makes it a good public micro-lab:
 
 ## Good next moves
 
-- add a small parameter-report CLI for fixed points, cycle hints, and Lyapunov classification
-- add a notebook on period-doubling and Feigenbaum scaling
+- compare the period scan at two tolerances or tail lengths so the thin-window cutoff story becomes more explicit
 - add one comparison note on why the exact r = 4 invariant density is useful but still a special case
+- add one spatial return-map or phase-of-cycle card for a selected periodic window instead of only scanning the parameter axis
 - branch into a second one-dimensional map only if the logistic lane already feels complete
