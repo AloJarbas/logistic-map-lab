@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from logisticlab.core import classify_parameter, detect_period, feigenbaum_estimates, histogram_density, invariant_density_r4, iterate, logistic, lyapunov_exponent, orbit_density, sample_tail, scan_superstable_doubling
+from logisticlab.core import classify_parameter, compare_period_scans, detect_period, feigenbaum_estimates, histogram_density, invariant_density_r4, iterate, logistic, lyapunov_exponent, orbit_density, sample_tail, scan_superstable_doubling
 
 
 class LogisticCoreTests(unittest.TestCase):
@@ -61,6 +61,11 @@ class LogisticCoreTests(unittest.TestCase):
         estimates = feigenbaum_estimates(points)
         self.assertGreaterEqual(len(estimates), 3)
         self.assertTrue(all(3.0 < estimate.delta < 6.0 for estimate in estimates[-2:]))
+
+    def test_deeper_period_scan_recovers_windows_without_losing_short_ones(self) -> None:
+        rows = compare_period_scans(3.0, 4.0, samples=400, short_warmup=1200, short_keep=64, deep_warmup=3600, deep_keep=512, max_period=64, tol=1e-8)
+        self.assertGreater(sum(1 for row in rows if row.recovered_stable), 0)
+        self.assertEqual(sum(1 for row in rows if row.lost_stable), 0)
 
 
 if __name__ == '__main__':

@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 import math
 
-from .core import feigenbaum_estimates, invariant_density_r4, logistic, lyapunov_exponent, orbit_density, sample_tail, scan_periods, scan_superstable_doubling
+from .core import PeriodScanComparisonRow, compare_period_scans, feigenbaum_estimates, invariant_density_r4, logistic, lyapunov_exponent, orbit_density, sample_tail, scan_periods, scan_superstable_doubling
 from .svg import PlotBox, export_png_from_svg, svg_line, svg_paragraph, svg_text
 
 REPO = Path(__file__).resolve().parents[1]
@@ -341,6 +341,201 @@ def period_doubling_svg() -> str:
     return '\n'.join(parts) + '\n'
 
 
+def _scan_fill(period: int | None) -> str:
+    if period is None:
+        return '#64748b'
+    if period <= 2:
+        return '#7dd3fc'
+    if period <= 4:
+        return '#c4b5fd'
+    if period <= 8:
+        return '#f9a8d4'
+    if period <= 16:
+        return '#f59e0b'
+    return '#ef4444'
+
+
+def _comparison_fill(row: PeriodScanComparisonRow) -> str:
+    if row.recovered_stable:
+        return '#f59e0b'
+    if row.shifted_period:
+        return '#f472b6'
+    if row.lost_stable:
+        return '#ef4444'
+    if row.deep_row.detected_period is None:
+        return '#334155'
+    return '#1d4ed8'
+
+
+def _period_level(period: int | None) -> float:
+    return -0.3 if period is None else math.log2(period)
+
+
+def period_sensitivity_svg(
+    *,
+    r_min: float = 3.0,
+    r_max: float = 4.0,
+    samples: int = 820,
+    short_warmup: int = 1200,
+    short_keep: int = 64,
+    deep_warmup: int = 3600,
+    deep_keep: int = 512,
+    max_period: int = 64,
+    tol: float = 1e-8,
+) -> str:
+    width, height = 1460, 980
+    parts = _header(
+        width,
+        height,
+        'Period-scan sensitivity: short tails miss the thin windows first',
+        'The logistic map does not just have period windows. It also has a cutoff story: a shallow scan understates the thin stable bands near chaos onset.',
+    )
+
+    comparisons = compare_period_scans(
+        r_min,
+        r_max,
+        samples=samples,
+        short_warmup=short_warmup,
+        short_keep=short_keep,
+        deep_warmup=deep_warmup,
+        deep_keep=deep_keep,
+        max_period=max_period,
+        tol=tol,
+    )
+
+    strip_left = 90.0
+    strip_right = 1360.0
+    strip_top = 156.0
+    strip_bottom = 378.0
+    zoom_box = PlotBox(90, 480, 760, 860, 3.44, 3.58, -0.6, 6.2)
+    bar_box = PlotBox(840, 520, 1360, 860, -0.5, 6.5, 0.0, 380.0)
+    strip_x = lambda r: strip_left + (r - r_min) / (r_max - r_min) * (strip_right - strip_left)
+    step_width = (strip_right - strip_left) / samples
+
+    parts.append(f'<rect x="{strip_left}" y="{strip_top}" width="{strip_right - strip_left}" height="{strip_bottom - strip_top}" class="panel"/>')
+    parts.append(svg_text(strip_left, strip_top - 18, 'Full-axis comparison', 'label'))
+    parts.append(svg_text(strip_left, strip_top + 6, f'short scan = warmup {short_warmup}, keep {short_keep}; deep scan = warmup {deep_warmup}, keep {deep_keep}', 'small'))
+
+    strip_rows = [
+        ('short tail', 198.0),
+        ('deep tail', 258.0),
+        ('what the short scan missed', 318.0),
+    ]
+    for label, y in strip_rows:
+        parts.append(svg_text(strip_left + 16, y - 10, label, 'small'))
+        parts.append(f'<rect x="{strip_left + 124:.1f}" y="{y - 22:.1f}" width="{strip_right - strip_left - 148:.1f}" height="34" fill="#0b1320" stroke="#334155" stroke-width="1.5" rx="10"/>')
+    for tick in [3.0, 3.2, 3.4, 3.6, 3.8, 4.0]:
+        x = strip_x(tick)
+        parts.append(svg_line(x, strip_top + 18, x, strip_bottom - 30, 'grid'))
+        parts.append(svg_text(x, strip_bottom + 8, f'{tick:.1f}', 'small', 'middle'))
+    parts.append(svg_text((strip_left + strip_right) / 2, strip_bottom + 38, 'growth parameter r', 'small', 'middle'))
+
+    for row in comparisons:
+        x = strip_x(row.r)
+        draw_x = x - step_width / 2.0
+        width_rect = max(1.2, step_width + 0.5)
+        parts.append(f'<rect x="{draw_x:.2f}" y="{198.0 - 16:.1f}" width="{width_rect:.2f}" height="22" fill="{_scan_fill(row.short_row.detected_period)}" opacity="0.95"/>')
+        parts.append(f'<rect x="{draw_x:.2f}" y="{258.0 - 16:.1f}" width="{width_rect:.2f}" height="22" fill="{_scan_fill(row.deep_row.detected_period)}" opacity="0.95"/>')
+        parts.append(f'<rect x="{draw_x:.2f}" y="{318.0 - 16:.1f}" width="{width_rect:.2f}" height="22" fill="{_comparison_fill(row)}" opacity="0.95"/>')
+
+    legend_y = 332.0
+    legend_items = [
+        ('#7dd3fc', 'period 2'),
+        ('#c4b5fd', 'period 3-4'),
+        ('#f9a8d4', 'period 5-8'),
+        ('#f59e0b', 'period 9-16'),
+        ('#ef4444', 'period 17+'),
+        ('#64748b', 'chaos or unresolved'),
+    ]
+    for idx, (color, label) in enumerate(legend_items):
+        lx = strip_left + 18 + idx * 190
+        parts.append(f'<rect x="{lx:.1f}" y="{legend_y:.1f}" width="16" height="16" fill="{color}" rx="4"/>')
+        parts.append(svg_text(lx + 24, legend_y + 13, label, 'small'))
+
+    parts.append(f'<rect x="{zoom_box.left}" y="{zoom_box.top}" width="{zoom_box.right - zoom_box.left}" height="{zoom_box.bottom - zoom_box.top}" class="panel"/>')
+    parts.append(svg_text(zoom_box.left, zoom_box.top - 18, 'Zoom near chaos onset', 'label'))
+    parts.append(svg_text(zoom_box.left, zoom_box.top + 6, 'deep scan recovers thin stable windows before the full-axis strip looks obviously different', 'small'))
+    for tick in [3.44, 3.47, 3.50, 3.53, 3.56, 3.58]:
+        x = zoom_box.sx(tick)
+        parts.append(svg_line(x, zoom_box.top, x, zoom_box.bottom, 'grid'))
+        parts.append(svg_text(x, zoom_box.bottom + 28, f'{tick:.2f}', 'small', 'middle'))
+    for tick, label in [(-0.3, 'chaos'), (1.0, '2'), (2.0, '4'), (3.0, '8'), (4.0, '16'), (5.0, '32'), (6.0, '64')]:
+        y = zoom_box.sy(tick)
+        parts.append(svg_line(zoom_box.left, y, zoom_box.right, y, 'grid'))
+        parts.append(svg_text(zoom_box.left - 18, y + 5, label, 'small', 'end'))
+    parts.append(svg_line(zoom_box.left, zoom_box.bottom, zoom_box.right, zoom_box.bottom, 'axis'))
+    parts.append(svg_line(zoom_box.left, zoom_box.top, zoom_box.left, zoom_box.bottom, 'axis'))
+    parts.append(svg_text((zoom_box.left + zoom_box.right) / 2, zoom_box.bottom + 56, 'growth parameter r', 'small', 'middle'))
+    parts.append(svg_text(36, (zoom_box.top + zoom_box.bottom) / 2, 'detected period (log2 scale)', 'small', 'middle', transform=f'rotate(-90 36 {(zoom_box.top + zoom_box.bottom) / 2:.1f})'))
+    for row in comparisons:
+        if row.r < zoom_box.x_min or row.r > zoom_box.x_max:
+            continue
+        sx = zoom_box.sx(row.r)
+        sy_short = zoom_box.sy(_period_level(row.short_row.detected_period))
+        sy_deep = zoom_box.sy(_period_level(row.deep_row.detected_period))
+        parts.append(f'<circle cx="{sx:.2f}" cy="{sy_short:.2f}" r="4.3" fill="#081018" stroke="#60a5fa" stroke-width="2.1" opacity="0.95"/>')
+        parts.append(f'<circle cx="{sx:.2f}" cy="{sy_deep:.2f}" r="3.9" fill="#f59e0b" stroke="#fed7aa" stroke-width="1.2" opacity="0.95"/>')
+    parts.append(svg_paragraph(zoom_box.left + 24, zoom_box.top + 46, [
+        'blue ring = short tail',
+        'orange fill = deep tail',
+        'orange above gray chaos = deeper patience recovered a stable window',
+    ], 'small'))
+
+    parts.append(f'<rect x="{bar_box.left}" y="{bar_box.top - 20}" width="{bar_box.right - bar_box.left}" height="{bar_box.bottom - bar_box.top + 20}" class="panel"/>')
+    parts.append(svg_text(bar_box.left, bar_box.top - 36, 'Count summary', 'label'))
+    parts.append(svg_text(bar_box.left, bar_box.top - 12, 'the deeper scan does not change the whole axis; it mainly rescues narrow stable bands', 'small'))
+    categories = [
+        ('period 2', lambda p: p == 2),
+        ('period 4', lambda p: p == 4),
+        ('period 8', lambda p: p == 8),
+        ('period 16', lambda p: p == 16),
+        ('period 32+', lambda p: p is not None and p >= 32),
+        ('other stable', lambda p: p not in (None, 2, 4, 8, 16) and (p is None or p < 32) is False),
+        ('chaos', lambda p: p is None),
+    ]
+    # Fix the 'other stable' bucket to mean finite stable periods not listed above and below 32.
+    categories[5] = ('other stable', lambda p: p is not None and p not in (2, 4, 8, 16) and p < 32)
+
+    short_counts = []
+    deep_counts = []
+    for _, predicate in categories:
+        short_counts.append(sum(1 for row in comparisons if predicate(row.short_row.detected_period)))
+        deep_counts.append(sum(1 for row in comparisons if predicate(row.deep_row.detected_period)))
+    max_count = max(short_counts + deep_counts)
+    bar_box = PlotBox(bar_box.left, bar_box.top, bar_box.right, bar_box.bottom, -0.5, len(categories) - 0.5, 0.0, max_count * 1.15)
+    for idx, (label, _) in enumerate(categories):
+        x = bar_box.sx(float(idx))
+        parts.append(svg_line(x, bar_box.top, x, bar_box.bottom, 'grid'))
+        parts.append(svg_text(x, bar_box.bottom + 28, label, 'small', 'middle', transform=f'rotate(-20 {x:.1f} {bar_box.bottom + 28:.1f})'))
+    for tick in range(0, int(max_count * 1.15) + 1, 50):
+        y = bar_box.sy(float(tick))
+        parts.append(svg_line(bar_box.left, y, bar_box.right, y, 'grid'))
+        parts.append(svg_text(bar_box.left - 16, y + 5, str(tick), 'small', 'end'))
+    parts.append(svg_line(bar_box.left, bar_box.bottom, bar_box.right, bar_box.bottom, 'axis'))
+    parts.append(svg_line(bar_box.left, bar_box.top, bar_box.left, bar_box.bottom, 'axis'))
+
+    slot = (bar_box.right - bar_box.left) / len(categories)
+    for idx, count in enumerate(short_counts):
+        x0 = bar_box.left + idx * slot + 18
+        y = bar_box.sy(float(count))
+        parts.append(f'<rect x="{x0:.2f}" y="{y:.2f}" width="22" height="{bar_box.bottom - y:.2f}" fill="#60a5fa" opacity="0.88" rx="4"/>')
+    for idx, count in enumerate(deep_counts):
+        x0 = bar_box.left + idx * slot + 46
+        y = bar_box.sy(float(count))
+        parts.append(f'<rect x="{x0:.2f}" y="{y:.2f}" width="22" height="{bar_box.bottom - y:.2f}" fill="#f59e0b" opacity="0.88" rx="4"/>')
+
+    recovered = sum(1 for row in comparisons if row.recovered_stable)
+    shifted = sum(1 for row in comparisons if row.shifted_period)
+    parts.append(svg_paragraph(862, 454, [
+        f'recovered stable points: {recovered}/{len(comparisons)}',
+        f'period shifts, not just chaos-vs-stable flips: {shifted}',
+        'short tail = blue, deep tail = orange',
+    ], 'small'))
+
+    parts.append('</svg>')
+    return '\n'.join(parts) + '\n'
+
+
 def write_gallery() -> list[Path]:
     ASSETS.mkdir(parents=True, exist_ok=True)
     files = {
@@ -349,8 +544,10 @@ def write_gallery() -> list[Path]:
         ASSETS / 'cobweb-triptych.svg': cobweb_triptych_svg(),
         ASSETS / 'density-contrast.svg': density_contrast_svg(),
         ASSETS / 'period-doubling-atlas.svg': period_doubling_svg(),
+        ASSETS / 'period-scan-sensitivity.svg': period_sensitivity_svg(),
     }
     for path, content in files.items():
         path.write_text(content)
     export_png_from_svg(ASSETS / 'period-doubling-atlas.svg', ASSETS / 'period-doubling-atlas.png', size=1800, dpi=300)
+    export_png_from_svg(ASSETS / 'period-scan-sensitivity.svg', ASSETS / 'period-scan-sensitivity.png', size=1800, dpi=300)
     return list(files)

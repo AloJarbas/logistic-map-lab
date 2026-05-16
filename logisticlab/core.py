@@ -26,6 +26,33 @@ class FeigenbaumEstimate:
     delta: float
 
 
+@dataclass(frozen=True)
+class PeriodScanComparisonRow:
+    r: float
+    short_row: PeriodScanRow
+    deep_row: PeriodScanRow
+
+    @property
+    def changed(self) -> bool:
+        return self.short_row.detected_period != self.deep_row.detected_period
+
+    @property
+    def recovered_stable(self) -> bool:
+        return self.short_row.detected_period is None and self.deep_row.detected_period is not None
+
+    @property
+    def lost_stable(self) -> bool:
+        return self.short_row.detected_period is not None and self.deep_row.detected_period is None
+
+    @property
+    def shifted_period(self) -> bool:
+        return (
+            self.short_row.detected_period is not None
+            and self.deep_row.detected_period is not None
+            and self.short_row.detected_period != self.deep_row.detected_period
+        )
+
+
 def logistic(r: float, x: float) -> float:
     return r * x * (1.0 - x)
 
@@ -236,3 +263,39 @@ def feigenbaum_estimates(points: list[SuperstablePoint]) -> list[FeigenbaumEstim
             )
         )
     return estimates
+
+
+def compare_period_scans(
+    r_min: float,
+    r_max: float,
+    *,
+    samples: int = 820,
+    short_warmup: int = 1200,
+    short_keep: int = 64,
+    deep_warmup: int = 3600,
+    deep_keep: int = 512,
+    max_period: int = 64,
+    tol: float = 1e-8,
+) -> list[PeriodScanComparisonRow]:
+    short_rows = scan_periods(
+        r_min,
+        r_max,
+        samples=samples,
+        warmup=short_warmup,
+        keep=short_keep,
+        max_period=max_period,
+        tol=tol,
+    )
+    deep_rows = scan_periods(
+        r_min,
+        r_max,
+        samples=samples,
+        warmup=deep_warmup,
+        keep=deep_keep,
+        max_period=max_period,
+        tol=tol,
+    )
+    return [
+        PeriodScanComparisonRow(r=short_row.r, short_row=short_row, deep_row=deep_row)
+        for short_row, deep_row in zip(short_rows, deep_rows)
+    ]
